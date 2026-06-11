@@ -151,6 +151,26 @@ python -m uvicorn app.api.main:app --reload
 http://127.0.0.1:8000/docs
 ```
 
+## Docker 部署
+
+使用 Docker Compose 启动后端和前端：
+
+```bash
+docker compose up --build
+```
+
+访问 FastAPI 文档：
+
+```text
+http://localhost:8000/docs
+```
+
+访问 Streamlit 前端：
+
+```text
+http://localhost:8501
+```
+
 ## 错误排查
 
 如果运行失败，请优先查看终端日志。项目会把关键错误输出到控制台，方便定位是配置文件、图像文件、RAG 检索还是报告生成出了问题。
