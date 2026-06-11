@@ -1,0 +1,14 @@
+numpy
+pandas
+matplotlib
+opencv-python
+Pillow
+scikit-image
+scikit-learn
+PyYAML
+pytest
+streamlit
+fastapi
+uvicorn
+ruff
+black==25.1.0
