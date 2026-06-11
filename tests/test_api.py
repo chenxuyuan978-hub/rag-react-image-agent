@@ -3,7 +3,14 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from app.api.main import health, read_report_api, run_agent_api, run_experiment_api
+from app.api.main import (
+    get_run_summary_api,
+    health,
+    list_runs_api,
+    read_report_api,
+    run_agent_api,
+    run_experiment_api,
+)
 from app.api.schemas import AgentRunRequest, ExperimentRunRequest
 from scripts.prepare_demo_data import prepare_demo_data
 
@@ -57,3 +64,24 @@ def test_report_api_blocks_path_traversal() -> None:
         read_report_api("../../README.md")
 
     assert error.value.status_code in {400, 404}
+
+
+def test_runs_api_returns_list() -> None:
+    """Check that the run history API returns a list."""
+    runs = list_runs_api()
+
+    assert isinstance(runs, list)
+
+
+def test_run_summary_api_returns_single_run() -> None:
+    """Check that the run summary API returns one archived run."""
+    prepare_demo_data()
+    experiment_response = run_experiment_api(
+        ExperimentRunRequest(config_path="examples/demo_config.yaml")
+    )
+
+    run_response = get_run_summary_api(experiment_response.run_id)
+
+    assert run_response.run_id == experiment_response.run_id
+    assert Path(run_response.run_dir).is_dir()
+    assert run_response.has_summary is True

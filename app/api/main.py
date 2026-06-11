@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from pathlib import Path
 
 import yaml
@@ -10,7 +11,9 @@ from app.api.schemas import (
     ExperimentRunResponse,
     HealthResponse,
     ReportResponse,
+    RunSummaryResponse,
 )
+from app.core.run_history import get_run_summary, list_runs
 from app.core.run_manager import copy_file_to_run, create_run_dir
 from app.experiments.config_schema import load_experiment_config
 from app.experiments.experiment_runner import run_experiment
@@ -143,3 +146,24 @@ def read_report_api(report_name: str) -> ReportResponse:
         report_name=report_name,
         content=report_path.read_text(encoding="utf-8"),
     )
+
+
+@app.get("/api/runs", response_model=list[RunSummaryResponse])
+def list_runs_api() -> list[RunSummaryResponse]:
+    """Return summaries for all archived runs."""
+    runs = list_runs()
+    return [RunSummaryResponse(**asdict(run)) for run in runs]
+
+
+@app.get("/api/runs/{run_id}", response_model=RunSummaryResponse)
+def get_run_summary_api(run_id: str) -> RunSummaryResponse:
+    """Return one archived run summary by run_id."""
+    try:
+        run_summary = get_run_summary(run_id)
+        return RunSummaryResponse(**asdict(run_summary))
+    except FileNotFoundError as error:
+        logger.error("Run summary API file error: %s", error)
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        logger.error("Run summary API validation error: %s", error)
+        raise HTTPException(status_code=400, detail=str(error)) from error

@@ -46,3 +46,18 @@ class ReportResponse(BaseModel):
 
     report_name: str
     content: str
+
+
+class RunSummaryResponse(BaseModel):
+    """Response schema for one archived run summary."""
+
+    run_id: str
+    run_dir: str
+    experiment_name: str | None
+    created_at: str | None
+    has_metrics: bool
+    has_summary: bool
+    has_report: bool
+    metrics_path: str | None
+    summary_path: str | None
+    report_path: str | None
