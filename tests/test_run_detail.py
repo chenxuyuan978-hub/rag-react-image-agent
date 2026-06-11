@@ -74,8 +74,8 @@ def test_get_run_detail_detects_output_images(detail_base_dir: Path) -> None:
     detail = get_run_detail(run_dir.name, base_dir=str(detail_base_dir / "runs"))
 
     assert detail.output_images == [
-        str(run_dir / "step_01_gaussian_blur.png"),
-        str(run_dir / "step_02_sharpen.jpg"),
+        str((run_dir / "step_01_gaussian_blur.png").resolve()),
+        str((run_dir / "step_02_sharpen.jpg").resolve()),
     ]
 
 
