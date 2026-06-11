@@ -4,14 +4,16 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.main import (
+    get_run_detail_api,
     get_run_summary_api,
     health,
     list_runs_api,
     read_report_api,
     run_agent_api,
+    run_comparison_api,
     run_experiment_api,
 )
-from app.api.schemas import AgentRunRequest, ExperimentRunRequest
+from app.api.schemas import AgentRunRequest, ComparisonRunRequest, ExperimentRunRequest
 from scripts.prepare_demo_data import prepare_demo_data
 
 
@@ -85,3 +87,33 @@ def test_run_summary_api_returns_single_run() -> None:
     assert run_response.run_id == experiment_response.run_id
     assert Path(run_response.run_dir).is_dir()
     assert run_response.has_summary is True
+
+
+def test_run_detail_api_returns_single_run_detail() -> None:
+    """Check that the run detail API returns archived run files."""
+    prepare_demo_data()
+    experiment_response = run_experiment_api(
+        ExperimentRunRequest(config_path="examples/demo_config.yaml")
+    )
+
+    detail_response = get_run_detail_api(experiment_response.run_id)
+
+    assert detail_response.run_id == experiment_response.run_id
+    assert detail_response.summary is not None
+    assert detail_response.metrics is not None
+    assert detail_response.output_images
+
+
+def test_comparison_run_api_runs_demo_config() -> None:
+    """Check that the comparison API can run the demo comparison config."""
+    prepare_demo_data()
+
+    response = run_comparison_api(
+        ComparisonRunRequest(config_path="examples/comparison_config.yaml")
+    )
+
+    assert response.comparison_name == "demo_denoising_comparison"
+    assert response.run_id
+    assert Path(response.run_dir).is_dir()
+    assert Path(response.metrics_path).is_file()
+    assert Path(response.summary_path).is_file()

@@ -1,0 +1,17 @@
+comparison_name: demo_denoising_comparison
+input_image: data/images/input.png
+reference_image: data/images/reference.png
+methods:
+  - name: gaussian_blur
+    params:
+      kernel_size: 5
+  - name: median_blur
+    params:
+      kernel_size: 5
+  - name: sharpen
+    params: {}
+metrics:
+  - mse
+  - psnr
+  - ssim
+output_dir: data/outputs/demo_denoising_comparison

@@ -7,14 +7,19 @@ from fastapi import FastAPI, HTTPException
 from app.api.schemas import (
     AgentRunRequest,
     AgentRunResponse,
+    ComparisonRunRequest,
+    ComparisonRunResponse,
     ExperimentRunRequest,
     ExperimentRunResponse,
     HealthResponse,
     ReportResponse,
+    RunDetailResponse,
     RunSummaryResponse,
 )
+from app.core.run_detail import get_run_detail
 from app.core.run_history import get_run_summary, list_runs
 from app.core.run_manager import copy_file_to_run, create_run_dir
+from app.experiments.comparison_runner import load_comparison_config, run_comparison
 from app.experiments.config_schema import load_experiment_config
 from app.experiments.experiment_runner import run_experiment
 from app.react.agent import ReActAgent
@@ -104,6 +109,34 @@ def run_experiment_api(request: ExperimentRunRequest) -> ExperimentRunResponse:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.post("/api/experiments/compare", response_model=ComparisonRunResponse)
+def run_comparison_api(request: ComparisonRunRequest) -> ComparisonRunResponse:
+    """Run a multi-method comparison experiment from an existing YAML config."""
+    try:
+        config = load_comparison_config(request.config_path)
+        run_info = create_run_dir(config.comparison_name)
+        copy_file_to_run(
+            request.config_path, run_info.run_dir, "comparison_config.yaml"
+        )
+        result = run_comparison(config, run_dir=run_info.run_dir)
+        return ComparisonRunResponse(
+            comparison_name=str(result["comparison_name"]),
+            run_id=run_info.run_id,
+            run_dir=run_info.run_dir,
+            metrics_path=str(result["metrics_path"]),
+            summary_path=str(result["summary_path"]),
+        )
+    except FileNotFoundError as error:
+        logger.error("Comparison API file error: %s", error)
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except AppError as error:
+        logger.error("Comparison API application error: %s", error)
+        raise HTTPException(status_code=400, detail=error.message) from error
+    except ValueError as error:
+        logger.error("Comparison API validation error: %s", error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @app.post("/api/agent/run", response_model=AgentRunResponse)
 def run_agent_api(request: AgentRunRequest) -> AgentRunResponse:
     """Run the minimal ReAct agent and return its trace."""
@@ -166,4 +199,18 @@ def get_run_summary_api(run_id: str) -> RunSummaryResponse:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
         logger.error("Run summary API validation error: %s", error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/api/runs/{run_id}/detail", response_model=RunDetailResponse)
+def get_run_detail_api(run_id: str) -> RunDetailResponse:
+    """Return detailed files and metadata for one archived run."""
+    try:
+        run_detail = get_run_detail(run_id)
+        return RunDetailResponse(**asdict(run_detail))
+    except FileNotFoundError as error:
+        logger.error("Run detail API file error: %s", error)
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        logger.error("Run detail API validation error: %s", error)
         raise HTTPException(status_code=400, detail=str(error)) from error

@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -21,6 +23,22 @@ class ExperimentRunResponse(BaseModel):
     experiment_name: str
     output_dir: str
     metrics_path: str | None
+    summary_path: str
+
+
+class ComparisonRunRequest(BaseModel):
+    """Request schema for running a comparison experiment from YAML."""
+
+    config_path: str
+
+
+class ComparisonRunResponse(BaseModel):
+    """Response schema for a comparison experiment run."""
+
+    comparison_name: str
+    run_id: str
+    run_dir: str
+    metrics_path: str
     summary_path: str
 
 
@@ -61,3 +79,15 @@ class RunSummaryResponse(BaseModel):
     metrics_path: str | None
     summary_path: str | None
     report_path: str | None
+
+
+class RunDetailResponse(BaseModel):
+    """Response schema for one archived run detail."""
+
+    run_id: str
+    run_dir: str
+    summary: dict[str, Any] | None
+    metrics: list[dict[str, str]] | None
+    report_text: str | None
+    trace_text: str | None
+    output_images: list[str]
