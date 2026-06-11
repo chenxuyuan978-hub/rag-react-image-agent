@@ -16,9 +16,14 @@ __pycache__/
 .env
 .env.*
 
-data/outputs/
-data/runs/
-data/indexes/
+data/outputs/*
+!data/outputs/.gitkeep
+
+data/runs/*
+!data/runs/.gitkeep
+
+data/indexes/*
+!data/indexes/.gitkeep
 
 *.log
 
