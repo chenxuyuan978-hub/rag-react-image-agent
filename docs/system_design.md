@@ -2,116 +2,258 @@
 
 ## 1. 项目背景
 
-在图像处理论文复现实验中，学生或研究者通常需要从论文中手动查找实验设置、算法参数、评价指标和结果分析方法。这个过程存在以下问题：
+图像处理论文复现实验通常需要同时处理论文阅读、实验配置、图像处理、指标计算和报告整理。对于课程项目或初步科研复现来说，常见痛点包括：
 
-- 实验设置分散在论文的不同章节中，查找效率较低；
-- 参数和评价指标经常出现在正文、表格或实验说明中，整理起来比较麻烦；
-- 手动复现实验需要依次准备图像、配置算法、运行处理流程和保存结果，步骤较多；
-- 实验结果分析和报告整理耗时，容易遗漏关键过程或指标。
+- 实验设置分散在论文的不同章节中；
+- 方法参数和评价指标需要人工反复查找；
+- 手动复现实验步骤较多，容易遗漏中间结果；
+- 不同算法之间的对比结果难以统一管理；
+- 实验报告整理耗时，且可追溯性不足。
 
-因此，本项目尝试用一个本地可运行的 Agent 帮助完成论文资料检索、实验执行、指标计算和报告生成。
+本项目尝试构建一个本地可运行的实验分析 Agent，把“论文检索、实验执行、指标分析、报告生成、历史归档”整合为一个可测试的工程项目。
 
 ## 2. 系统目标
 
-本项目希望构建一个基于 RAG + ReAct 的图像处理实验分析与论文复现 Agent。
+项目目标是构建一个基于 RAG + ReAct 的图像处理实验分析与论文复现 Agent。
 
-系统目标包括：
+系统希望实现：
 
-- 读取本地图像处理论文资料；
-- 从论文中检索与实验设置相关的内容；
-- 根据实验配置运行本地图像处理流程；
-- 计算图像评价指标；
-- 自动整理实验输出并生成 Markdown 报告；
-- 通过最小 ReAct 流程串联检索、实验、分析和报告生成步骤。
+- 读取本地 `.txt` / `.md` 论文资料；
+- 检索论文中的实验设置、参数和评价指标；
+- 根据 YAML 配置执行图像处理实验；
+- 计算 MSE、PSNR、SSIM；
+- 生成 Markdown 复现实验报告；
+- 用 run_id 归档每次实验结果；
+- 支持历史实验查看和实验详情查询；
+- 支持多算法对比实验和指标对比图表；
+- 通过 FastAPI 和 Streamlit 提供后端接口与前端展示。
 
 ## 3. 总体架构
 
-系统由以下模块组成：
+系统分为以下模块：
 
-- 用户输入模块：接收论文文件、图像文件、任务描述和实验配置；
-- RAG 检索模块：从论文资料中检索与实验设置相关的文本片段；
-- ReAct Agent 模块：按照 Thought / Action / Observation / Final Answer 的流程调用工具；
-- 图像处理实验模块：根据 YAML 配置执行图像处理操作并保存中间结果；
-- 指标计算模块：计算 MSE、PSNR、SSIM 等评价指标；
-- 报告生成模块：根据实验摘要、指标结果和论文片段生成 Markdown 报告；
-- 前端展示模块：提供简单 Streamlit 页面，方便上传文件和查看结果。
+- 用户输入模块：接收论文、图像、任务描述和 YAML 配置；
+- RAG 检索模块：从论文文本中检索相关实验片段；
+- ReAct Agent 模块：按 Thought / Action / Observation / Final Answer 流程调用工具；
+- 图像处理实验模块：执行单次实验和多算法对比实验；
+- 指标计算模块：计算 MSE、PSNR、SSIM；
+- 报告与图表模块：生成 Markdown 报告和指标对比图；
+- 实验归档模块：创建 run_id，记录历史实验和详情；
+- FastAPI 后端模块：提供程序化接口；
+- Streamlit 前端模块：提供可视化操作页面。
 
-整体流程为：
+整体流程：
 
 ```text
-用户输入 -> RAG 检索 -> ReAct Agent 工具调用 -> 图像处理实验 -> 指标分析 -> 报告生成 -> 前端展示
+用户任务 / 配置文件
+        |
+        v
+论文加载与 RAG 检索
+        |
+        v
+ReAct Agent 工具调用
+        |
+        v
+图像处理实验 / 多算法对比
+        |
+        v
+指标计算 -> 图表生成
+        |
+        v
+报告生成 -> run_id 归档 -> API / 前端展示
 ```
 
 ## 4. RAG 设计
 
-当前 MVP 使用本地 TF-IDF 实现 RAG 检索，不接入在线 API。
+当前 RAG 模块使用 TF-IDF 作为本地检索方案，重点是降低实现复杂度并保证离线可运行。
 
-RAG 模块主要包括：
+设计流程：
 
 - 文档加载：读取指定目录下的 `.txt` 和 `.md` 文件；
-- 文本切块：将长文档按照固定长度切分为多个 chunk，并保留来源文件和 chunk 编号；
-- TF-IDF 检索：使用 scikit-learn 的 `TfidfVectorizer` 对文本块建立索引；
-- 返回相关论文片段：根据查询语句返回相似度最高的文本片段；
-- 后续扩展：可以将 TF-IDF 替换为 embedding，并接入 FAISS 或 Chroma 等向量数据库。
+- 文本切块：按照固定长度把文档切成 chunk，保留来源文件和 chunk_id；
+- 索引构建：使用 `TfidfVectorizer` 对 chunk 建立词频特征；
+- 查询检索：根据任务描述或关键词返回 top-k 相关片段；
+- 工具封装：通过 `RagRetrieveTool` 提供给 ReAct Agent 调用。
+
+选择 TF-IDF 的原因：
+
+- 不需要网络和在线 API；
+- 对课程项目和 MVP 阶段足够透明；
+- 便于测试；
+- 后续可以替换为 embedding + FAISS / Chroma，而不改变上层 Agent 流程。
 
 ## 5. ReAct 设计
 
-ReAct 模块采用规则驱动的最小实现，不进行真正的大模型推理。
+当前 ReAct 是规则驱动版本，不接入 LLM。它保留 ReAct 的结构化轨迹，方便后续替换为真正的大模型推理。
 
-执行过程包括：
+执行结构：
 
-- Thought：记录当前需要完成的判断或目标；
-- Action：选择并调用一个工具；
+- Thought：记录当前步骤目标；
+- Action：调用具体工具；
 - Observation：记录工具返回结果；
-- Final Answer：给出最终结果或失败原因。
+- Final Answer：生成最终结论或失败原因。
 
-当前工具包括：
+当前工具：
 
-- `RagRetrieveTool`：检索论文中的相关实验片段；
-- `RunExperimentTool`：根据 YAML 配置运行图像处理实验；
-- `AnalyzeMetricsTool`：读取 `metrics.csv` 并生成简单指标分析；
-- `GenerateReportTool`：生成 Markdown 实验复现报告。
+- `RagRetrieveTool`：检索论文相关片段；
+- `RunExperimentTool`：运行单次图像处理实验；
+- `AnalyzeMetricsTool`：读取 `metrics.csv` 并输出简单指标分析；
+- `GenerateReportTool`：生成 Markdown 复现实验报告。
 
-MVP 阶段的执行顺序是固定的：先检索论文，再运行实验，然后分析指标，最后生成报告。
+MVP 阶段执行顺序固定：
+
+```text
+RAG 检索 -> 运行实验 -> 分析指标 -> 生成报告
+```
+
+这种设计保留了 Agent 的可解释执行轨迹，也避免一开始引入 LLM 带来的不稳定性。
 
 ## 6. 图像处理实验设计
 
-图像处理实验模块以 YAML 配置作为输入。配置中描述实验名称、输入图像、参考图像、操作序列、评价指标和输出目录。
+单次实验使用 YAML 配置描述：
 
-实验流程包括：
+- `experiment_name`：实验名称；
+- `input_image`：输入图像；
+- `reference_image`：参考图像；
+- `operations`：图像处理操作序列；
+- `metrics`：评价指标；
+- `output_dir`：输出目录。
 
-- 读取输入图像；
-- 按顺序执行图像处理操作；
-- 每一步保存一张中间结果图像；
-- 如果提供参考图像，则计算 MSE、PSNR 和 SSIM；
-- 保存 `metrics.csv`，记录评价指标；
-- 保存 `summary.json`，记录实验名称、输出目录、输出图像和指标文件路径。
+实验流程：
 
-当前支持的图像处理操作包括：
+1. 读取输入图像；
+2. 按配置顺序执行图像处理操作；
+3. 每一步保存输出图像；
+4. 如果有参考图像，计算 MSE、PSNR、SSIM；
+5. 保存 `metrics.csv`；
+6. 保存 `summary.json`。
 
-- `gaussian_blur`
-- `median_blur`
-- `sharpen`
-- `edge_detect`
-- `histogram_equalization`
+图像读取和保存兼容 Windows 中文路径：
 
-## 7. 当前 MVP 限制
+- 读取优先使用 `numpy.fromfile + cv2.imdecode`；
+- 保存优先使用 `cv2.imencode + Path.write_bytes`。
 
-当前版本是课程项目的最小可运行版本，主要限制包括：
+## 7. 多算法对比实验设计
 
-- 不支持 PDF 论文解析；
-- 不接入大模型 API；
-- ReAct 流程是规则驱动，不是真正的 LLM 推理；
-- 只支持基础传统图像处理方法；
-- 只支持 MSE、PSNR、SSIM 三种评价指标；
-- RAG 检索使用 TF-IDF，不支持语义 embedding 检索。
+多算法对比实验面向同一组输入图像和参考图像，批量运行多个处理方法。
 
-## 8. 后续优化方向
+配置文件包含：
 
-后续可以从以下方向继续扩展：
+- `comparison_name`；
+- `input_image`；
+- `reference_image`；
+- `methods`；
+- `metrics`；
+- `output_dir`。
 
-- PDF 解析：支持读取论文 PDF，并提取正文、表格和实验章节；
-- LLM 论文实验抽取：自动抽取实验设置、算法参数和评价指标；
-- 向量数据库：使用 FAISS 或 Chroma 存储和检索论文 embedding；
-- 深度学习模型复现：支持调用图像去噪、超分辨率、分割等深度学习模型；
-- 多 Agent 协作：将论文阅读、实验执行、指标分析和报告生成拆分为多个协作 Agent。
+运行流程：
+
+1. 加载输入图像和参考图像；
+2. 对每个 method 单独执行图像处理；
+3. 保存每个 method 的输出图像；
+4. 对每个 method 计算 MSE、PSNR、SSIM；
+5. 生成 `comparison_metrics.csv`；
+6. 生成 MSE、PSNR、SSIM 对比图；
+7. 生成 `comparison_summary.json`，记录输出图片、指标文件和图表路径。
+
+该模块用于展示不同传统图像处理方法在同一数据上的效果差异。
+
+## 8. run_id 实验归档设计
+
+为了避免实验结果互相覆盖，系统引入 run_id 机制。
+
+每次通过 API 或前端运行实验时，会创建：
+
+```text
+data/runs/{run_id}/
+```
+
+run_id 通常包含时间戳和安全化后的实验名称，例如：
+
+```text
+20260611_153000_demo_blur_experiment
+```
+
+归档目录中可以包含：
+
+- `config.yaml` 或 `comparison_config.yaml`；
+- 输出图像；
+- `metrics.csv` 或 `comparison_metrics.csv`；
+- `summary.json` 或 `comparison_summary.json`；
+- `report.md`；
+- `trace.txt`；
+- 指标对比图表。
+
+run history 模块用于列出历史实验，run detail 模块用于读取某次实验的详细结果。
+
+## 9. FastAPI 后端设计
+
+FastAPI 提供面向外部调用的接口层，主要负责请求校验、调用现有业务模块、返回结构化结果和处理错误。
+
+主要接口：
+
+- `GET /health`：健康检查；
+- `POST /api/experiments/run`：运行单次实验；
+- `POST /api/experiments/compare`：运行多算法对比实验；
+- `POST /api/agent/run`：运行 ReAct Agent；
+- `GET /api/runs`：列出历史 run；
+- `GET /api/runs/{run_id}`：查看 run 摘要；
+- `GET /api/runs/{run_id}/detail`：查看 run 详情；
+- `GET /api/reports/{report_name}`：读取报告内容。
+
+API 层不重复实现图像处理、RAG 或报告逻辑，只封装已有模块。
+
+## 10. Streamlit 前端设计
+
+Streamlit 前端用于展示项目能力，当前分为四个 tab：
+
+- 单次 Agent 实验：上传论文和图像，运行 ReAct Agent；
+- 历史实验：展示 run 列表，选择 run_id 后查看详情；
+- 多算法对比实验：运行对比 YAML，展示指标表、图表和输出图像；
+- 项目说明：说明当前系统能力。
+
+前端调用已有模块：
+
+- `run_history`；
+- `run_detail`；
+- `comparison_runner`；
+- ReAct Agent 和工具层；
+- 报告与图表模块。
+
+前端只做交互和展示，不重复实现核心业务逻辑。
+
+## 11. 工程化设计
+
+项目逐步加入工程化能力：
+
+- pytest：覆盖核心模块、API、前端导入、实验运行和异常情况；
+- Black：统一代码格式；
+- Ruff：静态检查和导入排序；
+- GitHub Actions：push 和 pull request 时自动运行检查；
+- Dockerfile：构建后端运行镜像；
+- Docker Compose：同时启动 FastAPI 后端和 Streamlit 前端；
+- 日志与错误处理：使用标准 logging 和自定义异常提升可维护性。
+
+## 12. 当前限制
+
+当前版本仍然保持本地实验平台定位，主要限制包括：
+
+- 论文只支持 `.txt` 和 `.md`，暂不支持 PDF；
+- RAG 使用 TF-IDF，不支持语义 embedding；
+- ReAct 是规则驱动，不是真正的 LLM 推理；
+- 图像处理只支持传统方法，不支持深度学习模型；
+- 指标只支持 MSE、PSNR、SSIM；
+- 报告是 Markdown 模板生成，尚未做复杂自然语言分析。
+
+## 13. 后续优化方向
+
+后续可以继续扩展：
+
+- PDF 论文解析，提取正文、表格和实验章节；
+- 使用 embedding + FAISS / Chroma 替换 TF-IDF；
+- 接入 LLM 自动抽取实验设置；
+- 使用 LLM ReAct Agent 动态选择工具；
+- 支持更多图像处理和深度学习复现模型；
+- 增加实验参数网格搜索；
+- 增强报告模板和可视化能力；
+- 支持用户管理、实验标签和结果对比面板。

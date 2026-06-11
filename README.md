@@ -1,85 +1,89 @@
 # 基于 RAG 与 ReAct 的图像处理论文复现实验分析 Agent
 
-这是一个课程/论文项目的 MVP 版本。它可以读取本地论文资料，检索实验设置，运行基础图像处理实验，计算图像评价指标，并生成 Markdown 实验报告。
+这是一个面向图像处理论文复现实验的本地实验平台。项目可以读取论文资料，检索实验设置，运行图像处理实验，计算评价指标，生成 Markdown 报告，并通过 FastAPI 与 Streamlit 提供后端接口和前端页面。
 
-项目当前不接 OpenAI API，不使用深度学习模型，也不依赖在线服务。所有核心流程都可以在本地运行。
+当前版本保持本地可运行：RAG 使用 TF-IDF，ReAct 使用规则驱动流程，不依赖 OpenAI API，不需要在线模型服务。
 
 ## 项目简介
 
-本项目的目标是做一个“论文复现实验小助手”：
+图像处理论文复现实验通常需要手动查找方法参数、准备输入图像、运行实验、计算指标并整理报告。本项目把这些步骤拆成可测试的模块，并用 RAG + ReAct 的方式串联起来：
 
-- 读取 `.txt` / `.md` 格式的图像处理论文资料；
-- 使用 TF-IDF 从论文中检索实验设置；
-- 根据 YAML 配置运行图像处理实验；
-- 计算 MSE、PSNR、SSIM 等指标；
-- 生成 Markdown 格式的实验复现报告；
-- 用一个最小 ReAct Agent 串起检索、实验、分析和报告生成流程。
+- RAG 从 `.txt` / `.md` 论文资料中检索实验设置；
+- ReAct Agent 按固定步骤调用检索、实验、指标分析和报告生成工具；
+- 实验运行器根据 YAML 配置执行图像处理操作；
+- 平台记录每次实验的 `run_id`，便于回溯历史结果；
+- Streamlit 前端支持单次 Agent 实验、历史实验查看和多算法对比。
+
+## 核心功能
+
+- 论文资料读取：支持 `.txt` 和 `.md`；
+- 本地 RAG 检索：使用 scikit-learn `TfidfVectorizer`；
+- 规则驱动 ReAct Agent：保留 Thought / Action / Observation / Final Answer 轨迹；
+- 图像处理实验：支持 `gaussian_blur`、`median_blur`、`sharpen`、`edge_detect`、`histogram_equalization`；
+- 图像指标计算：支持 MSE、PSNR、SSIM；
+- Markdown 报告生成：输出实验配置摘要、流程、指标和论文片段；
+- FastAPI 后端：提供健康检查、实验运行、Agent 运行、历史查询等接口；
+- Streamlit 前端：支持文件上传、历史实验、实验详情和多算法对比展示；
+- run_id 实验归档：每次运行保存到独立目录；
+- 多算法对比实验：批量运行多个方法并生成指标表和对比图；
+- 工程化能力：pytest、Black、Ruff、GitHub Actions、Docker Compose。
 
 ## 系统架构
 
-整体流程可以理解为：
-
 ```text
-用户任务
-  -> RAG 检索
-  -> ReAct 工具调用
-  -> 实验运行
-  -> 指标分析
-  -> 报告生成
+用户任务 / YAML 配置
+        |
+        v
+论文资料加载 -> RAG 检索 -> ReAct 工具调用
+        |                         |
+        |                         v
+        |                  图像处理实验运行
+        |                         |
+        |                         v
+        |                  指标计算与图表生成
+        |                         |
+        v                         v
+     论文片段  ------------>  Markdown 报告
+                                  |
+                                  v
+                         run_id 历史归档 / 前端展示
 ```
 
-其中：
+主要模块：
 
-- RAG 负责从论文资料里找相关实验信息；
-- ReAct 工具层负责调用检索、实验、分析、报告等功能；
-- 实验运行器负责执行图像处理操作；
-- 报告模块负责把结果整理成 Markdown 文件。
+- `app/rag`：论文加载、文本切块和 TF-IDF 检索；
+- `app/react`：规则驱动 Agent、工具层和 trace；
+- `app/image_ops`：图像读取、处理函数和评价指标；
+- `app/experiments`：实验配置、单次实验运行、多算法对比实验；
+- `app/reports`：Markdown 报告和指标对比图表；
+- `app/core`：run_id 归档、历史列表和实验详情；
+- `app/api`：FastAPI 后端；
+- `frontend`：Streamlit 前端。
 
-## 目录结构
+## 快速开始
 
-```text
-rag_react_image_agent/
-├── README.md
-├── requirements.txt
-├── app/
-│   ├── image_ops/       # 图像读取、图像处理、评价指标
-│   ├── experiments/     # YAML 配置读取与实验运行器
-│   ├── rag/             # 本地 TF-IDF RAG 检索
-│   ├── react/           # ReAct 工具层与最小 Agent
-│   └── reports/         # Markdown 报告生成
-├── data/
-│   ├── papers/          # 可放入 txt/md 论文资料
-│   ├── images/          # Demo 输入图和参考图
-│   └── outputs/         # 实验输出结果
-├── examples/
-│   ├── demo_config.yaml # Demo 实验配置
-│   └── demo_paper.md    # Demo 论文资料
-├── scripts/
-│   ├── prepare_demo_data.py
-│   ├── run_demo_experiment.py
-│   ├── run_rag_demo.py
-│   └── run_react_demo.py
-└── tests/
-```
-
-## 环境准备
-
-建议先进入项目根目录：
+进入项目目录：
 
 ```bash
 cd rag_react_image_agent
 ```
 
-创建虚拟环境：
+创建并激活虚拟环境：
 
 ```bash
 python -m venv .venv
 ```
 
-Windows PowerShell 激活虚拟环境：
+Windows PowerShell：
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+```
+
+macOS / Linux：
+
+```bash
+source .venv/bin/activate
 ```
 
 安装依赖：
@@ -88,126 +92,190 @@ Windows PowerShell 激活虚拟环境：
 python -m pip install -r requirements.txt
 ```
 
-## 运行测试
+运行测试：
 
 ```bash
 python -m pytest
 ```
 
-如果看到类似 `passed` 的结果，说明当前功能可以正常运行。
+## 本地运行
 
-## 代码质量检查
+生成 demo 图像数据：
+
+```bash
+python scripts/prepare_demo_data.py
+```
+
+运行普通图像处理实验：
+
+```bash
+python scripts/run_demo_experiment.py examples/demo_config.yaml
+```
+
+运行 RAG 检索 demo：
+
+```bash
+python scripts/run_rag_demo.py
+```
+
+运行完整 ReAct demo：
+
+```bash
+python scripts/run_react_demo.py
+```
+
+运行多算法对比实验：
+
+```bash
+python scripts/run_comparison_experiment.py examples/comparison_config.yaml
+```
+
+## Docker 运行
+
+使用 Docker Compose 同时启动后端和前端：
+
+```bash
+docker compose up --build
+```
+
+访问地址：
+
+- FastAPI 文档：`http://localhost:8000/docs`
+- Streamlit 前端：`http://localhost:8501`
+
+Docker 镜像使用 `opencv-python-headless`，减少对系统 GUI 库的依赖，更适合服务器和 CI 环境。
+
+## FastAPI 接口
+
+启动后端：
+
+```bash
+python -m uvicorn app.api.main:app --reload
+```
+
+常用接口：
+
+- `GET /health`：健康检查；
+- `POST /api/experiments/run`：根据 YAML 运行单次实验；
+- `POST /api/experiments/compare`：运行多算法对比实验；
+- `POST /api/agent/run`：运行规则驱动 ReAct Agent；
+- `GET /api/runs`：获取历史实验列表；
+- `GET /api/runs/{run_id}`：获取某次实验摘要；
+- `GET /api/runs/{run_id}/detail`：获取某次实验详情；
+- `GET /api/reports/{report_name}`：读取 `data/outputs` 下的报告文本。
+
+接口文档：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## Streamlit 前端
+
+启动前端：
+
+```bash
+streamlit run frontend/streamlit_app.py
+```
+
+前端包含四个页面：
+
+- 单次 Agent 实验：上传论文、输入图像和参考图像，运行 ReAct 流程；
+- 历史实验：查看 `data/runs` 下的 run 列表，并查看 summary、metrics、report、trace 和输出图像；
+- 多算法对比实验：使用 `examples/comparison_config.yaml` 或上传 YAML 运行对比实验；
+- 项目说明：展示项目当前能力和用途。
+
+## 多算法对比实验
+
+对比实验配置示例：
+
+```yaml
+comparison_name: demo_denoising_comparison
+input_image: data/images/input.png
+reference_image: data/images/reference.png
+methods:
+  - name: gaussian_blur
+    params:
+      kernel_size: 5
+  - name: median_blur
+    params:
+      kernel_size: 5
+  - name: sharpen
+    params: {}
+metrics:
+  - mse
+  - psnr
+  - ssim
+output_dir: data/outputs/demo_denoising_comparison
+```
+
+运行后会生成：
+
+- 每个算法的输出图像；
+- `comparison_metrics.csv`；
+- `comparison_summary.json`；
+- `mse_comparison.png`；
+- `psnr_comparison.png`；
+- `ssim_comparison.png`。
+
+## 历史实验管理
+
+FastAPI 和部分脚本会为实验创建独立 `run_id`，结果保存到：
+
+```text
+data/runs/{run_id}/
+```
+
+历史实验支持：
+
+- 列出所有 run；
+- 查看某次 run 的 summary；
+- 查看 metrics 表格；
+- 查看 Markdown 报告；
+- 查看 trace；
+- 查看输出图像；
+- 查看对比实验图表。
+
+`data/runs`、`data/outputs` 和 `data/indexes` 默认只保留 `.gitkeep`，真实运行结果不会作为核心代码提交。
+
+## 测试与 CI
+
+本地测试：
+
+```bash
+python -m pytest
+```
+
+代码格式检查：
 
 ```bash
 python -m black --check app tests scripts frontend
 python -m ruff check app tests scripts frontend
 ```
 
-## CI 自动检查
+项目已配置 GitHub Actions。每次 push 或 pull request 到 `main` 分支时，CI 会自动执行依赖安装、Black、Ruff 和 pytest。
 
-项目配置了 GitHub Actions。每次 push 或 pull request 到 `main` 分支时，CI 会自动安装依赖，并运行 Black、Ruff 和 pytest，帮助提前发现格式、静态检查和测试问题。
+## 项目截图位置提示
 
-## 运行 Demo
-
-先生成 Demo 图片数据：
-
-```bash
-python scripts/prepare_demo_data.py
-```
-
-运行一次普通图像处理实验：
-
-```bash
-python scripts/run_demo_experiment.py examples/demo_config.yaml
-```
-
-运行本地 RAG 检索 Demo：
-
-```bash
-python scripts/run_rag_demo.py
-```
-
-运行完整 ReAct Demo：
-
-```bash
-python scripts/run_react_demo.py
-```
-
-启动 Streamlit 前端：
-
-```bash
-streamlit run frontend/streamlit_app.py
-```
-
-启动 FastAPI 后端：
-
-```bash
-python -m uvicorn app.api.main:app --reload
-```
-
-后端启动后，可以在浏览器打开 API 文档：
+后续可以在以下目录补充截图：
 
 ```text
-http://127.0.0.1:8000/docs
+docs/assets/
 ```
 
-## Docker 部署
+建议截图包括：
 
-使用 Docker Compose 启动后端和前端：
-
-```bash
-docker compose up --build
-```
-
-访问 FastAPI 文档：
-
-```text
-http://localhost:8000/docs
-```
-
-访问 Streamlit 前端：
-
-```text
-http://localhost:8501
-```
-
-## 错误排查
-
-如果运行失败，请优先查看终端日志。项目会把关键错误输出到控制台，方便定位是配置文件、图像文件、RAG 检索还是报告生成出了问题。
-
-FastAPI 后端遇到错误时，会返回清晰的错误信息，例如配置缺失、文件不存在或报告路径非法等。
-
-## 输出结果说明
-
-运行实验后，`data/outputs/` 下会生成实验结果，例如：
-
-- `step_01_gaussian_blur.png`：第 1 步图像处理结果；
-- `step_02_sharpen.png`：第 2 步图像处理结果；
-- `metrics.csv`：MSE、PSNR、SSIM 等评价指标；
-- `summary.json`：实验结果摘要；
-- `report.md`：Markdown 实验复现报告。
-
-## 当前 MVP 支持功能
-
-- 支持 `.txt` / `.md` 论文资料；
-- 使用 TF-IDF 实现本地 RAG 检索；
-- 使用规则驱动的最小 ReAct 流程；
-- 支持基础图像处理；
-- 支持 MSE、PSNR、SSIM 指标；
-- 支持生成 Markdown 报告。
-
-当前支持的图像处理操作：
-
-- `gaussian_blur`
-- `median_blur`
-- `sharpen`
-- `edge_detect`
-- `histogram_equalization`
+- Streamlit 单次 Agent 实验页面；
+- 历史实验列表页面；
+- run detail 展示页面；
+- 多算法对比实验页面；
+- FastAPI Swagger 文档页面。
 
 ## 后续可扩展方向
 
 - PDF 论文解析；
-- OpenAI API 接入；
+- embedding RAG；
 - FAISS / Chroma 向量数据库；
+- 接入 LLM 做实验设置抽取和动态工具选择；
 - 深度学习图像复现模型；
-- Streamlit 前端。
+- 更完整的实验参数管理和报告模板。
