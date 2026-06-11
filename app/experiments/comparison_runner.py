@@ -8,6 +8,7 @@ import yaml
 
 from app.experiments.experiment_runner import METRICS, PROCESSORS, save_image
 from app.image_ops.image_loader import load_image
+from app.reports.comparison_charts import generate_metric_charts
 from app.utils.errors import ConfigError, ExperimentError
 from app.utils.logger import get_logger
 
@@ -185,6 +186,7 @@ def run_comparison(
     metrics_path = output_dir / "comparison_metrics.csv"
     summary_path = output_dir / "comparison_summary.json"
     _write_comparison_metrics(metrics_path, metric_rows)
+    chart_paths = generate_metric_charts(str(metrics_path), str(output_dir))
 
     result: dict[str, Any] = {
         "comparison_name": config.comparison_name,
@@ -192,6 +194,7 @@ def run_comparison(
         "output_images": output_images,
         "metrics_path": str(metrics_path),
         "summary_path": str(summary_path),
+        "chart_paths": chart_paths,
         "methods": [asdict(method) for method in config.methods],
     }
     summary_path.write_text(

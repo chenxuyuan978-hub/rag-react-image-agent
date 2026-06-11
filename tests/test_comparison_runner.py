@@ -77,6 +77,8 @@ def test_run_comparison_generates_outputs_and_metrics(
     assert len(result["output_images"]) == 2
     assert Path(result["metrics_path"]).is_file()
     assert Path(result["summary_path"]).is_file()
+    assert result["chart_paths"]
+    assert all(Path(chart_path).is_file() for chart_path in result["chart_paths"])
 
     with Path(result["metrics_path"]).open("r", newline="", encoding="utf-8") as file:
         rows = list(csv.DictReader(file))
@@ -86,6 +88,7 @@ def test_run_comparison_generates_outputs_and_metrics(
 
     summary = json.loads(Path(result["summary_path"]).read_text(encoding="utf-8"))
     assert summary["comparison_name"] == "comparison_demo"
+    assert summary["chart_paths"]
 
 
 def test_run_comparison_with_run_dir_overrides_output_dir(
