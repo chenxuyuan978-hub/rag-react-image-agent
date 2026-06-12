@@ -210,6 +210,23 @@ LANGSMITH_PROJECT=rag-react-image-agent
 
 当前默认 FakeLLM 的好处是：本地开发、CI、Docker 都可以在没有密钥的情况下稳定运行。后续接入真实 LLM 时，可以在不改动现有实验、RAG、报告模块的前提下替换客户端实现。
 
+## LLM 实验配置抽取
+
+当前 LLM 层已经支持从论文片段中抽取实验配置，输出统一的 `ExperimentSpec`：
+
+- `method`：项目内部方法名，例如 `gaussian_blur`；
+- `params`：方法参数，例如 `{"kernel_size": 5}`；
+- `metrics`：评价指标，例如 `["mse", "psnr", "ssim"]`；
+- `raw_response`：LLM 原始响应，方便调试。
+
+运行 demo：
+
+```bash
+python scripts/run_llm_extraction_demo.py
+```
+
+当前默认仍使用 `FakeLLMClient`，不需要真实 API Key。FakeLLM 会返回稳定 JSON，方便本地开发和 CI 测试。后续第三阶段会接入 LangGraph 工作流，把抽取结果用于自动生成实验配置，并进一步接入 LangSmith 进行链路追踪。
+
 ## 多算法对比实验
 
 对比实验配置示例：
