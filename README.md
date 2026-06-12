@@ -185,6 +185,31 @@ streamlit run frontend/streamlit_app.py
 - 多算法对比实验：使用 `examples/comparison_config.yaml` 或上传 YAML 运行对比实验；
 - 项目说明：展示项目当前能力和用途。
 
+## LLM 配置
+
+第三阶段会逐步接入 LangGraph、LangSmith 和真实 LLM。当前版本先提供统一的 LLM 配置与客户端适配层，默认使用 `FakeLLMClient`，不需要真实 API Key，也不会联网调用模型。
+
+示例环境变量见 `.env.example`：
+
+```env
+LLM_PROVIDER=fake
+LLM_MODEL=fake-local
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_TEMPERATURE=0.0
+LLM_TIMEOUT_SECONDS=60
+```
+
+预留 LangSmith 配置：
+
+```env
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=rag-react-image-agent
+```
+
+当前默认 FakeLLM 的好处是：本地开发、CI、Docker 都可以在没有密钥的情况下稳定运行。后续接入真实 LLM 时，可以在不改动现有实验、RAG、报告模块的前提下替换客户端实现。
+
 ## 多算法对比实验
 
 对比实验配置示例：
