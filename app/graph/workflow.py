@@ -10,6 +10,7 @@ from app.graph.nodes import (
     run_experiment_node,
 )
 from app.graph.state import GraphAgentState
+from app.observability.langsmith_config import configure_langsmith_environment
 
 
 def build_langgraph_workflow() -> Any:
@@ -37,6 +38,7 @@ def run_langgraph_agent(
     paper_dir: str = "data/papers",
 ) -> GraphAgentState:
     """Run the LangGraph workflow and return the final state."""
+    langsmith_tracing_enabled = configure_langsmith_environment()
     initial_state: GraphAgentState = {
         "task": task,
         "config_path": config_path,
@@ -48,6 +50,17 @@ def run_langgraph_agent(
         "report_path": None,
         "final_answer": None,
         "error": None,
-        "steps": [],
+        "steps": [
+            {
+                "node": "configure_langsmith",
+                "status": "ok",
+                "detail": (
+                    "LangSmith tracing enabled."
+                    if langsmith_tracing_enabled
+                    else "LangSmith tracing disabled."
+                ),
+                "data": {"langsmith_tracing_enabled": langsmith_tracing_enabled},
+            }
+        ],
     }
     return build_langgraph_workflow().invoke(initial_state)

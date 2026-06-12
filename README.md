@@ -252,6 +252,26 @@ python scripts/run_langgraph_demo.py
 
 本阶段仍默认使用 `FakeLLMClient`，不需要真实 LLM API Key，也不启用 LangSmith。后续可以把 LangGraph 节点接入真实 LLM、LangSmith tracing 和自动 YAML 配置生成。
 
+## LangSmith Trace 可观测性
+
+LangSmith tracing 是可选能力，默认不开启。本地开发、Docker 和 CI 都不依赖 LangSmith，也不需要 LangSmith API Key。
+
+如需在 LangSmith 平台查看 LangGraph 工作流 trace，可以设置环境变量：
+
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=你的 LangSmith API Key
+LANGSMITH_PROJECT=rag-react-image-agent
+```
+
+然后运行：
+
+```bash
+python scripts/run_langgraph_demo.py
+```
+
+如果 `LANGSMITH_TRACING=true` 但没有提供 `LANGSMITH_API_KEY`，项目会自动保持 tracing 关闭，不会影响测试、前端、后端或 Docker 启动。
+
 ## 多算法对比实验
 
 对比实验配置示例：

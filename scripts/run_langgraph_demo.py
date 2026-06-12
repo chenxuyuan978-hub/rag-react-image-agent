@@ -18,6 +18,24 @@ def main() -> int:
         paper_dir="data/papers",
     )
 
+    langsmith_step = next(
+        (
+            step
+            for step in state.get("steps", [])
+            if step.get("node") == "configure_langsmith"
+        ),
+        {},
+    )
+    tracing_enabled = bool(
+        langsmith_step.get("data", {}).get("langsmith_tracing_enabled", False)
+    )
+    print(f"langsmith_tracing_enabled: {tracing_enabled}")
+    if not tracing_enabled:
+        print(
+            "LangSmith tracing disabled. Set LANGSMITH_TRACING=true and "
+            "LANGSMITH_API_KEY to enable it."
+        )
+
     for step in state.get("steps", []):
         print(step)
 
