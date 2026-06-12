@@ -14,4 +14,9 @@ class GraphAgentState(TypedDict):
     report_path: str | None
     final_answer: str | None
     error: str | None
+    error_type: str | None
+    diagnosis: dict[str, Any] | None
+    retry_count: int
+    max_retries: int
+    failed_node: str | None
     steps: list[dict[str, Any]]

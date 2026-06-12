@@ -39,9 +39,16 @@ def main() -> int:
     for step in state.get("steps", []):
         print(step)
 
+    if state.get("error"):
+        print("workflow failed with diagnosis")
+    else:
+        print("workflow completed successfully")
+
     print(f"final_answer: {state.get('final_answer')}")
     print(f"report_path: {state.get('report_path')}")
     print(f"error: {state.get('error')}")
+    print(f"diagnosis: {state.get('diagnosis')}")
+    print(f"retry_count: {state.get('retry_count')}")
     return 0
 
 

@@ -272,6 +272,21 @@ python scripts/run_langgraph_demo.py
 
 如果 `LANGSMITH_TRACING=true` 但没有提供 `LANGSMITH_API_KEY`，项目会自动保持 tracing 关闭，不会影响测试、前端、后端或 Docker 启动。
 
+## Agent 失败诊断与重试
+
+LangGraph workflow 支持基础错误诊断。实验运行、指标分析或报告生成失败时，workflow 不会直接让进程崩溃，而是进入 `diagnose_error` 节点，生成结构化诊断信息。
+
+当前错误类型包括：
+
+- `config_error`：配置文件、YAML 或 config_path 相关错误；
+- `file_not_found`：文件、图片或路径不存在；
+- `experiment_error`：实验运行、operation、图像处理相关错误；
+- `metrics_error`：metrics.csv 或指标读取/计算相关错误；
+- `report_error`：report.md 或报告生成相关错误；
+- `unknown_error`：无法判断的错误。
+
+诊断信息会写入 LangGraph state 和 steps，便于后续前端或日志展示。当前默认最多重试一次，不会无限重试。本阶段只对常见的实验运行失败尝试重新进入 `run_experiment`，配置错误等需要用户修正的问题不会自动重试。
+
 ## 多算法对比实验
 
 对比实验配置示例：
