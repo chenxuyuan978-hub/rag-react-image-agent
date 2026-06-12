@@ -12,3 +12,4 @@ fastapi
 uvicorn
 ruff
 black==25.1.0
+langgraph

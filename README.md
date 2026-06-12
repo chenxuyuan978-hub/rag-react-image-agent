@@ -227,6 +227,31 @@ python scripts/run_llm_extraction_demo.py
 
 当前默认仍使用 `FakeLLMClient`，不需要真实 API Key。FakeLLM 会返回稳定 JSON，方便本地开发和 CI 测试。后续第三阶段会接入 LangGraph 工作流，把抽取结果用于自动生成实验配置，并进一步接入 LangSmith 进行链路追踪。
 
+## LangGraph 工作流
+
+项目现在同时保留两套 Agent 组织方式：
+
+- 旧版规则 ReAct Agent：位于 `app/react/agent.py`，流程固定、稳定可测，继续作为已有 API 和前端能力的基础；
+- 新增 LangGraph Agent：位于 `app/graph/`，用节点式工作流组织论文检索、LLM 实验配置抽取、实验运行、指标分析和报告生成。
+
+当前 LangGraph 工作流节点顺序：
+
+```text
+retrieve_paper_context
+  -> extract_experiment_spec
+  -> run_experiment
+  -> analyze_metrics
+  -> generate_report
+```
+
+运行 demo：
+
+```bash
+python scripts/run_langgraph_demo.py
+```
+
+本阶段仍默认使用 `FakeLLMClient`，不需要真实 LLM API Key，也不启用 LangSmith。后续可以把 LangGraph 节点接入真实 LLM、LangSmith tracing 和自动 YAML 配置生成。
+
 ## 多算法对比实验
 
 对比实验配置示例：
