@@ -381,3 +381,29 @@ docs/assets/
 - 接入 LLM 做实验设置抽取和动态工具选择；
 - 深度学习图像复现模型；
 - 更完整的实验参数管理和报告模板。
+
+## Agent Evaluation
+
+项目提供 Agent workflow evaluation 样例，用于验证 LangGraph Agent 的完整工作流是否稳定。
+
+它会检查：
+
+- 是否执行了 `retrieve_paper_context`、`extract_experiment_spec`、`run_experiment`、`analyze_metrics` 和 `generate_report`；
+- 错误场景是否进入 `diagnose_error`；
+- 输出是否包含 `final_answer`、`report_path`、`error` 或 `diagnosis`；
+- 在没有真实 LLM API Key 的情况下是否稳定；
+- 在没有 LangSmith API Key 的情况下是否稳定。
+
+运行评估脚本：
+
+```bash
+python scripts/run_agent_evaluation.py
+```
+
+评估结果会输出 `total`、`passed`、`failed` 和 `pass_rate`。
+
+更详细说明见：
+
+```text
+docs/agent_evaluation.md
+```
