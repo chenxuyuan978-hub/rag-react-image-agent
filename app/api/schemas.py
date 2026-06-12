@@ -59,6 +59,30 @@ class AgentRunResponse(BaseModel):
     final_answer: str
 
 
+class LangGraphAgentRunRequest(BaseModel):
+    """Request schema for running the LangGraph agent workflow."""
+
+    task: str
+    config_path: str = "examples/demo_config.yaml"
+    paper_dir: str = "data/papers"
+
+
+class LangGraphAgentRunResponse(BaseModel):
+    """Response schema for a LangGraph agent workflow run."""
+
+    final_answer: str | None
+    report_path: str | None
+    error: str | None
+    error_type: str | None
+    diagnosis: dict[str, Any] | None
+    retry_count: int
+    metrics_analysis: str | None
+    extracted_spec: dict[str, Any] | None
+    steps: list[dict[str, Any]]
+    langsmith_tracing_enabled: bool
+    paper_context_count: int
+
+
 class ReportResponse(BaseModel):
     """Response schema for reading a Markdown report."""
 

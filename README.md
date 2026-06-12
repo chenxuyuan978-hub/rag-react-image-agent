@@ -159,6 +159,7 @@ python -m uvicorn app.api.main:app --reload
 - `POST /api/experiments/run`：根据 YAML 运行单次实验；
 - `POST /api/experiments/compare`：运行多算法对比实验；
 - `POST /api/agent/run`：运行规则驱动 ReAct Agent；
+- `POST /api/agent/langgraph/run`：运行 LangGraph 智能 Agent 工作流；
 - `GET /api/runs`：获取历史实验列表；
 - `GET /api/runs/{run_id}`：获取某次实验摘要；
 - `GET /api/runs/{run_id}/detail`：获取某次实验详情；

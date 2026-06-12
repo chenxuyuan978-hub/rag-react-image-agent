@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -12,6 +13,8 @@ from app.api.schemas import (
     ExperimentRunRequest,
     ExperimentRunResponse,
     HealthResponse,
+    LangGraphAgentRunRequest,
+    LangGraphAgentRunResponse,
     ReportResponse,
     RunDetailResponse,
     RunSummaryResponse,
@@ -22,6 +25,7 @@ from app.core.run_manager import copy_file_to_run, create_run_dir
 from app.experiments.comparison_runner import load_comparison_config, run_comparison
 from app.experiments.config_schema import load_experiment_config
 from app.experiments.experiment_runner import run_experiment
+from app.graph.workflow import run_langgraph_agent
 from app.react.agent import ReActAgent
 from app.utils.errors import AppError, ConfigError
 from app.utils.logger import get_logger
@@ -74,6 +78,15 @@ def write_archived_config(config_path: str, run_dir: str) -> str:
         encoding="utf-8",
     )
     return str(archived_path)
+
+
+def get_langsmith_tracing_status(steps: list[dict[str, Any]]) -> bool:
+    """Return whether LangSmith tracing was enabled for a workflow state."""
+    langsmith_step = next(
+        (step for step in steps if step.get("node") == "configure_langsmith"),
+        {},
+    )
+    return bool(langsmith_step.get("data", {}).get("langsmith_tracing_enabled", False))
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -169,6 +182,48 @@ def run_agent_api(request: AgentRunRequest) -> AgentRunResponse:
     except ValueError as error:
         logger.error("Agent API validation error: %s", error)
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/api/agent/langgraph/run", response_model=LangGraphAgentRunResponse)
+def run_langgraph_agent_api(
+    request: LangGraphAgentRunRequest,
+) -> LangGraphAgentRunResponse:
+    """Run the LangGraph agent workflow and return a frontend-friendly state."""
+    try:
+        state = run_langgraph_agent(
+            task=request.task,
+            config_path=request.config_path,
+            paper_dir=request.paper_dir,
+        )
+        steps = state.get("steps", [])
+        return LangGraphAgentRunResponse(
+            final_answer=state.get("final_answer"),
+            report_path=state.get("report_path"),
+            error=state.get("error"),
+            error_type=state.get("error_type"),
+            diagnosis=state.get("diagnosis"),
+            retry_count=state.get("retry_count", 0),
+            metrics_analysis=state.get("metrics_analysis"),
+            extracted_spec=state.get("extracted_spec"),
+            steps=steps,
+            langsmith_tracing_enabled=get_langsmith_tracing_status(steps),
+            paper_context_count=len(state.get("paper_context", [])),
+        )
+    except Exception as error:
+        logger.error("LangGraph agent API error: %s", error)
+        return LangGraphAgentRunResponse(
+            final_answer="LangGraph workflow failed before returning state.",
+            report_path=None,
+            error=str(error),
+            error_type="unknown_error",
+            diagnosis=None,
+            retry_count=0,
+            metrics_analysis=None,
+            extracted_spec=None,
+            steps=[],
+            langsmith_tracing_enabled=False,
+            paper_context_count=0,
+        )
 
 
 @app.get("/api/reports/{report_name:path}", response_model=ReportResponse)
