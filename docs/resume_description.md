@@ -42,3 +42,31 @@ Python, FastAPI, Streamlit, OpenCV, NumPy, pandas, matplotlib, scikit-image, sci
 ## 7. 简历关键词
 
 RAG, ReAct, LangGraph, LangSmith, Agent Workflow, FastAPI, Streamlit, OpenCV, Image Processing, Experiment Management, Markdown Report, Docker, CI, pytest
+
+## 8. 第五阶段后简历描述版本
+
+### 当前稳妥版
+
+基于 RAG + LangGraph 构建图像处理论文复现实验分析 Agent，支持论文检索、实验配置抽取、图像处理实验运行、指标分析与报告生成；新增真实论文与源码接入模块，支持论文 txt/md/pdf 与源码 zip/目录输入，为每个复现任务创建独立 workspace，生成 `paper_text.txt` 与 `intake_summary.json`，并通过 FastAPI 与 Streamlit 提供任务创建和结果展示能力。
+
+可拆成简历 bullet：
+
+- 构建 FastAPI + Streamlit 实验平台，支持 LangGraph Agent、历史实验、多算法对比和真实论文/源码接入页面。
+- 设计 reproduction workspace 机制，为每次复现任务隔离论文、源码、日志、artifact 和 summary，提升任务可追踪性。
+- 实现论文 txt/md/pdf 文本接入与源码 zip/目录接入，生成 `paper_text.txt` 和 `intake_summary.json`，为后续源码分析与环境规划打基础。
+- 使用 pytest、Ruff、Black、GitHub Actions 和 Docker Compose 保证项目可测试、可部署和可维护。
+
+### 后续增强版：第六至第十阶段完成后使用
+
+以下描述是后续目标，不代表当前已经全部完成：
+
+基于 RAG + LangGraph 构建面向科研复现实验的 Agent 平台，支持真实论文与源码接入、源码结构分析、环境规划、容器化实验执行、日志诊断、指标对齐和复现报告生成；通过 FastAPI、Streamlit、Docker、CI 和可观测性能力，将论文理解、实验运行、失败诊断和结果管理组织为可追踪的任务工作流。
+
+后续增强版可强调：
+
+- 源码结构分析：识别依赖文件、入口脚本、配置文件和 README 运行命令。
+- 环境规划：根据源码材料生成 Python/Conda/Docker 环境建议。
+- 容器化执行：在隔离环境中运行受控实验命令，采集日志和 artifact。
+- 日志诊断：对依赖缺失、路径错误、运行失败等问题生成诊断建议。
+- 指标对齐：对比论文目标指标和本地运行指标，生成差异分析。
+- 企业级任务平台：增加任务队列、权限、审计、监控和更完整的可观测性。
