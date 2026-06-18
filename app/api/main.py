@@ -1,4 +1,6 @@
+import json
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,9 @@ from app.api.schemas import (
     LangGraphAgentRunRequest,
     LangGraphAgentRunResponse,
     ReportResponse,
+    ReproductionIntakeRequest,
+    ReproductionIntakeResponse,
+    ReproductionRunSummaryResponse,
     RunDetailResponse,
     RunSummaryResponse,
 )
@@ -27,10 +32,13 @@ from app.experiments.config_schema import load_experiment_config
 from app.experiments.experiment_runner import run_experiment
 from app.graph.workflow import run_langgraph_agent
 from app.react.agent import ReActAgent
+from app.reproduction.intake import run_reproduction_intake
+from app.reproduction.schemas import ReproductionIntakeInput
 from app.utils.errors import AppError, ConfigError
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+REPRODUCTION_RUNS_DIR = Path("data/reproduction_runs")
 
 
 app = FastAPI(
@@ -87,6 +95,55 @@ def get_langsmith_tracing_status(steps: list[dict[str, Any]]) -> bool:
         {},
     )
     return bool(langsmith_step.get("data", {}).get("langsmith_tracing_enabled", False))
+
+
+def _resolve_reproduction_run_dir(run_id: str) -> Path:
+    """Resolve a reproduction run directory and block path traversal."""
+    if not run_id or Path(run_id).is_absolute():
+        raise HTTPException(status_code=400, detail="Invalid reproduction run_id")
+
+    base_dir = REPRODUCTION_RUNS_DIR.resolve()
+    run_dir = (base_dir / run_id).resolve()
+    try:
+        run_dir.relative_to(base_dir)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail="Reproduction run path is outside data/reproduction_runs",
+        ) from error
+
+    if not run_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Reproduction run not found")
+    return run_dir
+
+
+def _read_reproduction_summary(run_id: str) -> dict[str, Any]:
+    """Read one reproduction run intake summary JSON."""
+    run_dir = _resolve_reproduction_run_dir(run_id)
+    summary_path = run_dir / "intake_summary.json"
+    if not summary_path.is_file():
+        raise HTTPException(status_code=404, detail="Intake summary not found")
+    return json.loads(summary_path.read_text(encoding="utf-8"))
+
+
+def _build_reproduction_run_list_item(run_dir: Path) -> ReproductionRunSummaryResponse:
+    """Build one reproduction run list response from its summary when available."""
+    summary_path = run_dir / "intake_summary.json"
+    summary: dict[str, Any] = {}
+    if summary_path.is_file():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+    created_at = datetime.fromtimestamp(run_dir.stat().st_mtime).isoformat(
+        timespec="seconds"
+    )
+    return ReproductionRunSummaryResponse(
+        run_id=run_dir.name,
+        status=summary.get("status"),
+        workspace_dir=summary.get("workspace_dir", str(run_dir)),
+        paper_text_chars=summary.get("paper_text_chars"),
+        source_file_count=summary.get("source_file_count"),
+        created_at=created_at,
+    )
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -224,6 +281,62 @@ def run_langgraph_agent_api(
             langsmith_tracing_enabled=False,
             paper_context_count=0,
         )
+
+
+@app.post("/api/reproduction/intake", response_model=ReproductionIntakeResponse)
+def run_reproduction_intake_api(
+    request: ReproductionIntakeRequest,
+) -> ReproductionIntakeResponse:
+    """Create a real paper and source intake workspace."""
+    if not request.paper_path.strip() or not request.source_path.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="paper_path and source_path are required",
+        )
+
+    try:
+        summary = run_reproduction_intake(
+            ReproductionIntakeInput(
+                paper_path=request.paper_path,
+                source_path=request.source_path,
+                base_dir=str(REPRODUCTION_RUNS_DIR),
+            )
+        )
+        return ReproductionIntakeResponse(**asdict(summary))
+    except FileNotFoundError as error:
+        logger.error("Reproduction intake file error: %s", error)
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        logger.error("Reproduction intake validation error: %s", error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        logger.error("Reproduction intake API error: %s", error)
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@app.get(
+    "/api/reproduction/runs",
+    response_model=list[ReproductionRunSummaryResponse],
+)
+def list_reproduction_runs_api() -> list[ReproductionRunSummaryResponse]:
+    """List existing reproduction intake runs."""
+    base_dir = REPRODUCTION_RUNS_DIR
+    if not base_dir.is_dir():
+        return []
+
+    run_dirs = [path for path in base_dir.iterdir() if path.is_dir()]
+    run_dirs.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return [_build_reproduction_run_list_item(run_dir) for run_dir in run_dirs]
+
+
+@app.get(
+    "/api/reproduction/runs/{run_id}",
+    response_model=ReproductionIntakeResponse,
+)
+def get_reproduction_run_api(run_id: str) -> ReproductionIntakeResponse:
+    """Return one reproduction intake summary by run_id."""
+    summary = _read_reproduction_summary(run_id)
+    return ReproductionIntakeResponse(**summary)
 
 
 @app.get("/api/reports/{report_name:path}", response_model=ReportResponse)

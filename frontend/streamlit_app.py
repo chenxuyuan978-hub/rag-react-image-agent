@@ -62,6 +62,46 @@ def run_langgraph_agent_via_api(
     return payload
 
 
+def run_reproduction_intake_via_api(
+    paper_path: str,
+    source_path: str,
+    api_base_url: str | None = None,
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """Create a reproduction intake task through the FastAPI backend."""
+    base_url = (api_base_url or get_api_base_url()).rstrip("/")
+    response = requests.post(
+        f"{base_url}/api/reproduction/intake",
+        json={
+            "paper_path": paper_path,
+            "source_path": source_path,
+        },
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("Reproduction intake API returned invalid JSON.")
+    return payload
+
+
+def list_reproduction_runs_via_api(
+    api_base_url: str | None = None,
+    timeout_seconds: int = 30,
+) -> list[dict[str, Any]]:
+    """List reproduction intake runs through the FastAPI backend."""
+    base_url = (api_base_url or get_api_base_url()).rstrip("/")
+    response = requests.get(
+        f"{base_url}/api/reproduction/runs",
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        raise ValueError("Reproduction runs API returned invalid JSON.")
+    return payload
+
+
 def save_uploaded_file(uploaded_file: Any, target_dir: Path) -> Path:
     """Save a Streamlit uploaded file into a target directory."""
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -479,6 +519,91 @@ def render_intelligent_agent_tab() -> None:
     st.write(f"论文片段数量：`{payload.get('paper_context_count', 0)}`")
 
 
+def _show_api_error(error: Exception, action: str) -> None:
+    """Display friendly API errors in Streamlit."""
+    if isinstance(error, requests.exceptions.ConnectionError):
+        st.error("后端服务可能没有启动，请先运行 FastAPI 服务或 docker compose up。")
+    elif isinstance(error, requests.exceptions.Timeout):
+        st.error(f"{action}请求超时，请检查 FastAPI 服务是否正常运行。")
+    elif isinstance(error, requests.exceptions.HTTPError):
+        response = error.response
+        detail = response.text if response is not None else str(error)
+        st.error(f"后端返回错误状态：{detail}")
+    elif isinstance(error, ValueError):
+        st.error(f"后端返回内容不是有效 JSON：{error}")
+    else:
+        st.error(f"{action}失败：{error}")
+
+
+def render_reproduction_tab() -> None:
+    """Render real paper and source-code intake controls."""
+    st.header("论文源码接入")
+    st.caption(
+        "本页面只创建真实论文与源码材料的复现 workspace，不分析源码、不安装环境、不执行源码。"
+    )
+
+    paper_path = st.text_input(
+        "论文文件路径（支持 .pdf/.md/.txt）",
+        value="data/sample_inputs/papers/demo_paper.txt",
+    )
+    source_path = st.text_input(
+        "源码路径（支持 .zip 或本地源码目录）",
+        value="data/sample_inputs/repos/demo_repo",
+    )
+    api_base_url = st.text_input(
+        "FastAPI 服务地址",
+        value=get_api_base_url(),
+        key="reproduction_api_base_url",
+    )
+
+    if st.button("创建复现任务"):
+        if not paper_path.strip() or not source_path.strip():
+            st.error("paper_path 和 source_path 不能为空。")
+        else:
+            try:
+                payload = run_reproduction_intake_via_api(
+                    paper_path=paper_path,
+                    source_path=source_path,
+                    api_base_url=api_base_url,
+                )
+                st.success(f"复现任务已创建：{payload.get('run_id')}")
+                st.write(f"workspace_dir：`{payload.get('workspace_dir')}`")
+                st.write(f"paper_text_chars：`{payload.get('paper_text_chars', 0)}`")
+                st.write(f"paper_text_lines：`{payload.get('paper_text_lines', 0)}`")
+                st.write(f"source_file_count：`{payload.get('source_file_count', 0)}`")
+
+                st.subheader("源码顶层结构")
+                top_level_items = payload.get("source_top_level_items") or []
+                if top_level_items:
+                    st.write(top_level_items)
+                else:
+                    st.info("暂无源码顶层结构。")
+
+                warnings = payload.get("warnings") or []
+                errors = payload.get("errors") or []
+                if warnings:
+                    st.warning("\n".join(str(item) for item in warnings))
+                if errors:
+                    st.error("\n".join(str(item) for item in errors))
+
+                st.subheader("intake_summary JSON")
+                st.json(payload)
+            except Exception as error:
+                _show_api_error(error, "创建复现任务")
+
+    st.divider()
+    st.subheader("历史复现任务")
+    if st.button("刷新复现任务列表"):
+        try:
+            runs = list_reproduction_runs_via_api(api_base_url=api_base_url)
+            if runs:
+                st.dataframe(pd.DataFrame(runs), use_container_width=True)
+            else:
+                st.info("暂无复现任务。")
+        except Exception as error:
+            _show_api_error(error, "刷新复现任务列表")
+
+
 def render_project_info_tab() -> None:
     """Render a concise project overview."""
     st.header("项目说明")
@@ -493,6 +618,7 @@ def render_project_info_tab() -> None:
 - 查看单次 run 的 summary、metrics、report、trace 和输出图像；
 - 使用 YAML 配置运行多算法对比实验；
 - 通过 FastAPI 调用 LangGraph 智能 Agent；
+- 接入真实论文文件和源码材料，创建独立复现 workspace；
 - 展示 MSE、PSNR、SSIM 的对比图表。
 """
     )
@@ -503,8 +629,22 @@ def main() -> None:
     st.set_page_config(page_title="RAG + ReAct 图像处理 Agent", layout="wide")
     st.title("基于 RAG + ReAct 的图像处理论文复现实验分析 Agent")
 
-    agent_tab, history_tab, comparison_tab, intelligent_agent_tab, info_tab = st.tabs(
-        ["单次 Agent 实验", "历史实验", "多算法对比实验", "智能 Agent", "项目说明"]
+    (
+        agent_tab,
+        history_tab,
+        comparison_tab,
+        intelligent_agent_tab,
+        reproduction_tab,
+        info_tab,
+    ) = st.tabs(
+        [
+            "单次 Agent 实验",
+            "历史实验",
+            "多算法对比实验",
+            "智能 Agent",
+            "论文源码接入",
+            "项目说明",
+        ]
     )
 
     with agent_tab:
@@ -515,6 +655,8 @@ def main() -> None:
         render_comparison_tab()
     with intelligent_agent_tab:
         render_intelligent_agent_tab()
+    with reproduction_tab:
+        render_reproduction_tab()
     with info_tab:
         render_project_info_tab()
 

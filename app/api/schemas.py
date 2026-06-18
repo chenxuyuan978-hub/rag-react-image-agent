@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -115,3 +115,40 @@ class RunDetailResponse(BaseModel):
     report_text: str | None
     trace_text: str | None
     output_images: list[str]
+
+
+class ReproductionIntakeRequest(BaseModel):
+    """Request schema for creating a reproduction intake task."""
+
+    paper_path: str
+    source_path: str
+
+
+class ReproductionIntakeResponse(BaseModel):
+    """Response schema for a reproduction intake summary."""
+
+    run_id: str
+    workspace_dir: str
+    paper_input_path: str | None = None
+    source_input_path: str | None = None
+    paper_saved_path: str | None = None
+    source_saved_path: str | None = None
+    paper_text_path: str | None = None
+    paper_text_chars: int = 0
+    paper_text_lines: int = 0
+    source_file_count: int = 0
+    source_top_level_items: list[str] = Field(default_factory=list)
+    status: str
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class ReproductionRunSummaryResponse(BaseModel):
+    """Response schema for one reproduction run list item."""
+
+    run_id: str
+    status: str | None = None
+    workspace_dir: str | None = None
+    paper_text_chars: int | None = None
+    source_file_count: int | None = None
+    created_at: str | None = None

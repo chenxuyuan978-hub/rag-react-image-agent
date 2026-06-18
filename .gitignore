@@ -25,6 +25,8 @@ data/runs/*
 data/indexes/*
 !data/indexes/.gitkeep
 
+data/reproduction_runs/
+
 *.log
 
 tests/_run_manager_temp/
