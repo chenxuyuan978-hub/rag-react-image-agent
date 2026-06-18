@@ -15,6 +15,16 @@ from app.graph.nodes import (
 from app.graph.state import GraphAgentState
 from app.observability.langsmith_config import configure_langsmith_environment
 
+"""
+workflow.py 是 LangGraph Agent 的流程编排层。
+它使用 StateGraph(GraphAgentState) 创建状态图，
+将论文检索、实验配置抽取、实验运行、指标分析、报告生成、错误诊断和重试封装为节点，
+并通过普通边和条件边定义执行顺序。
+run_langgraph_agent() 会先配置 LangSmith tracing，
+初始化 GraphAgentState，
+然后调用编译后的 workflow 执行并返回最终 state。
+"""
+
 
 def _route_after_run_experiment(state: GraphAgentState) -> str:
     """Route after run_experiment based on workflow error state."""

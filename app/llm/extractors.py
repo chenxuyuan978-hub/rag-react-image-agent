@@ -5,6 +5,14 @@ from typing import Any
 
 from app.llm.client import LLMClient, get_llm_client
 
+"""
+extractors.py 负责前后两端：
+构造 prompt + 解析 response
+
+LLMClient 负责中间：
+把 prompt 发给模型并拿回 response
+"""
+
 METHOD_ALIASES = {
     "gaussian_blur": "gaussian_blur",
     "gaussian blur": "gaussian_blur",

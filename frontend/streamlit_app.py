@@ -1,9 +1,11 @@
 import sys
 from datetime import datetime
+from os import getenv
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import requests
 import streamlit as st
 import yaml
 
@@ -26,6 +28,38 @@ from app.react.tools import (
     RagRetrieveTool,
     RunExperimentTool,
 )
+
+DEFAULT_API_BASE_URL = "http://localhost:8000"
+
+
+def get_api_base_url() -> str:
+    """Return the FastAPI base URL used by the Streamlit frontend."""
+    return getenv("API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
+
+
+def run_langgraph_agent_via_api(
+    task: str,
+    config_path: str,
+    paper_dir: str,
+    api_base_url: str | None = None,
+    timeout_seconds: int = 60,
+) -> dict[str, Any]:
+    """Run the LangGraph Agent through the FastAPI backend."""
+    base_url = (api_base_url or get_api_base_url()).rstrip("/")
+    response = requests.post(
+        f"{base_url}/api/agent/langgraph/run",
+        json={
+            "task": task,
+            "config_path": config_path,
+            "paper_dir": paper_dir,
+        },
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("LangGraph Agent API returned invalid JSON.")
+    return payload
 
 
 def save_uploaded_file(uploaded_file: Any, target_dir: Path) -> Path:
@@ -319,6 +353,132 @@ def render_comparison_tab() -> None:
         st.error(f"对比实验运行失败：{error}")
 
 
+def _format_langgraph_step_rows(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Format LangGraph workflow steps for table display."""
+    rows = []
+    for step in steps:
+        message = step.get("detail") or step.get("message") or step.get("summary") or ""
+        if not message and step.get("diagnosis"):
+            message = "diagnosis generated"
+        rows.append(
+            {
+                "node": step.get("node", ""),
+                "status": step.get("status", ""),
+                "message": message,
+            }
+        )
+    return rows
+
+
+def render_intelligent_agent_tab() -> None:
+    """Render the LangGraph intelligent Agent workflow page."""
+    st.header("智能 Agent")
+    st.caption(
+        "该页面通过 FastAPI 调用 LangGraph Agent 工作流，不在前端重复实现 Agent 逻辑。"
+    )
+
+    task = st.text_area(
+        "任务描述",
+        value="根据论文中的 Gaussian Blur 去噪实验设置运行实验并生成报告",
+    )
+    config_path = st.text_input(
+        "实验配置路径",
+        value="examples/demo_config.yaml",
+    )
+    paper_dir = st.text_input(
+        "论文目录",
+        value="data/papers",
+    )
+    api_base_url = st.text_input(
+        "FastAPI 服务地址",
+        value=get_api_base_url(),
+    )
+
+    if not st.button("运行 LangGraph 智能 Agent"):
+        return
+
+    try:
+        payload = run_langgraph_agent_via_api(
+            task=task,
+            config_path=config_path,
+            paper_dir=paper_dir,
+            api_base_url=api_base_url,
+        )
+    except requests.exceptions.ConnectionError:
+        st.error("后端服务可能没有启动，请先运行 FastAPI 服务或 docker compose up。")
+        return
+    except requests.exceptions.Timeout:
+        st.error("后端请求超时，请检查 FastAPI 服务是否正常运行。")
+        return
+    except requests.exceptions.HTTPError as error:
+        st.error(f"后端返回错误状态：{error}")
+        return
+    except ValueError as error:
+        st.error(f"后端返回内容不是有效 JSON：{error}")
+        return
+    except Exception as error:
+        st.error(f"智能 Agent 调用失败：{error}")
+        return
+
+    final_answer = payload.get("final_answer")
+    if final_answer:
+        if payload.get("error"):
+            st.info(final_answer)
+        else:
+            st.success(final_answer)
+
+    report_path = payload.get("report_path")
+    if report_path:
+        st.write(f"报告路径：`{report_path}`")
+
+    error = payload.get("error")
+    if error:
+        st.error(f"Workflow 错误：{error}")
+        error_type = payload.get("error_type")
+        if error_type:
+            st.warning(f"错误类型：`{error_type}`")
+
+    diagnosis = payload.get("diagnosis")
+    if diagnosis:
+        with st.expander("错误诊断", expanded=True):
+            st.json(diagnosis)
+
+    st.write(f"重试次数：`{payload.get('retry_count', 0)}`")
+
+    langsmith_enabled = bool(payload.get("langsmith_tracing_enabled", False))
+    if langsmith_enabled:
+        st.info("LangSmith tracing 当前已启用。")
+    else:
+        st.info(
+            "LangSmith tracing 当前未启用；设置 LANGSMITH_TRACING=true 和 "
+            "LANGSMITH_API_KEY 后可启用。"
+        )
+
+    extracted_spec = payload.get("extracted_spec")
+    if extracted_spec:
+        st.subheader("抽取到的实验配置")
+        st.json(extracted_spec)
+
+    metrics_analysis = payload.get("metrics_analysis")
+    if metrics_analysis:
+        st.subheader("指标分析")
+        st.markdown(str(metrics_analysis))
+
+    st.subheader("执行步骤")
+    steps = payload.get("steps") or []
+    if steps:
+        st.dataframe(
+            pd.DataFrame(_format_langgraph_step_rows(steps)),
+            use_container_width=True,
+        )
+        with st.expander("完整 steps JSON"):
+            st.json(steps)
+    else:
+        st.warning("未返回执行步骤。")
+
+    st.write(f"论文片段数量：`{payload.get('paper_context_count', 0)}`")
+
+
 def render_project_info_tab() -> None:
     """Render a concise project overview."""
     st.header("项目说明")
@@ -332,6 +492,7 @@ def render_project_info_tab() -> None:
 - 查看 `data/runs` 下的历史实验列表；
 - 查看单次 run 的 summary、metrics、report、trace 和输出图像；
 - 使用 YAML 配置运行多算法对比实验；
+- 通过 FastAPI 调用 LangGraph 智能 Agent；
 - 展示 MSE、PSNR、SSIM 的对比图表。
 """
     )
@@ -342,8 +503,8 @@ def main() -> None:
     st.set_page_config(page_title="RAG + ReAct 图像处理 Agent", layout="wide")
     st.title("基于 RAG + ReAct 的图像处理论文复现实验分析 Agent")
 
-    agent_tab, history_tab, comparison_tab, info_tab = st.tabs(
-        ["单次 Agent 实验", "历史实验", "多算法对比实验", "项目说明"]
+    agent_tab, history_tab, comparison_tab, intelligent_agent_tab, info_tab = st.tabs(
+        ["单次 Agent 实验", "历史实验", "多算法对比实验", "智能 Agent", "项目说明"]
     )
 
     with agent_tab:
@@ -352,6 +513,8 @@ def main() -> None:
         render_history_tab()
     with comparison_tab:
         render_comparison_tab()
+    with intelligent_agent_tab:
+        render_intelligent_agent_tab()
     with info_tab:
         render_project_info_tab()
 

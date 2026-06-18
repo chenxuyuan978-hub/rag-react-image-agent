@@ -17,6 +17,13 @@ class RetrievalResult:
     chunk_id: int
 
 
+"""字词的重要性随着它在文档中出现的次数成正比增加，
+但同时会随着它在语料库中出现的频率成反比下降。
+简单的解释为，一个单词在一个文档中出现次数很多(TF)，同时在其他文档中出现此时较少(IDF)，
+那么我们认为这个单词对该文档是非常重要的。
+"""
+
+
 class TfidfRetriever:
     """A local TF-IDF retriever for document chunks."""
 
